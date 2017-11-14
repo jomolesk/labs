@@ -156,7 +156,7 @@
     "MABSServerVM1SubnetRef": "[concat(variables('MABSServerVM1VnetID'), '/subnets/', variables('OPSTrainingVNETSubnet1Name'))]",
     "MABSServerVM1StorageAccountContainerName": "vhds",
     "MABSServerVM1NicName": "[concat(parameters('MABSServerVM1Name'), 'NetworkInterface')]",
-    "MABSDISK1": "[concat('http://',variables('vmstorageName'),'.blob.core.windows.net/','vhds','/','dataDisk1.vhd')]",
+    "MABSDISK1": "[concat('http://',variables('vmstorageName'),'.blob.core.usgovcloudapi.net/','vhds','/','dataDisk1.vhd')]",
     "IAASBackupVM1ImagePublisher": "MicrosoftWindowsServer",
     "IAASBackupVM1ImageOffer": "WindowsServer",
     "IAASBackupVM1OSDiskName": "IAASBackupVM1OSDisk",
