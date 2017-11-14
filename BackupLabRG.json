@@ -1,0 +1,632 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmstorageType": {
+      "type": "string",
+      "defaultValue": "Premium_LRS",
+      "allowedValues": [
+        "Premium_LRS"
+      ]
+    },
+    "ADVMName": {
+      "type": "string",
+      "defaultValue": "MABSADDSVM1",
+      "minLength": 1
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "demouser",
+      "metadata": {
+        "description": "The name of the administrator account of the new VM and domain"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "defaultValue": "demo@pass123",
+      "metadata": {
+        "description": "The password for the administrator account of the new VM and domain"
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "defaultValue": "opsaaddemo.local",
+      "metadata": {
+        "description": "The FQDN of the Active Directory Domain to be created"
+      }
+    },
+    "ADInstallscriptUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "script to execute"
+      },
+      "defaultValue": "https://raw.githubusercontent.com/opsgility/lab-support-public/master/script-extensions/deploy-ad.ps1"
+    },
+    "DomainJoinscriptUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "script to execute"
+      },
+      "defaultValue": "https://raw.githubusercontent.com/opsgility/lab-support-public/master/script-extensions/domain-join.ps1"
+    },
+    "ADVMWindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2012-R2-Datacenter"
+      ]
+    },
+    "AgentBackupVM1": {
+      "type": "string",
+      "defaultValue": "AgentBackupVM1",
+      "minLength": 1
+    },
+    "AgentBackupVM1OSVersion": {
+      "type": "string",
+      "defaultValue": "2016-Datacenter",
+      "allowedValues": [
+        "2016-Datacenter"
+      ]
+    },
+    "AgentBackupVM1Name": {
+      "type": "string",
+      "defaultValue": "AgentBackupVM1",
+      "minLength": 1
+    },
+    "AgentBackupVM1WindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    },
+    "MABSServerVM1Name": {
+      "type": "string",
+      "defaultValue": "MABSServerVM1",
+      "minLength": 1
+    },
+    "MABSServerVM1WindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    },
+    "IAASBackupVM1Name": {
+      "type": "string",
+      "defaultValue": "IAASBackupVM1",
+      "minLength": 1
+    },
+    "IAASBackupVM1WindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    }
+  },
+  "variables": {
+    "VNETNAME": "OPSTrainingVNET",
+    "DNSIP": "10.0.1.4",
+    "OPSTrainingVNETPrefix": "10.0.0.0/16",
+    "OPSTrainingVNETSubnet1Name": "Apps",
+    "OPSTrainingVNETSubnet1Prefix": "10.0.0.0/24",
+    "OPSTrainingVNETSubnet2Name": "Identity",
+    "OPSTrainingVNETSubnet2Prefix": "10.0.1.0/24",
+    "vmstorageName": "[concat('vmstorage', uniqueString(resourceGroup().id))]",
+    "ADVMImagePublisher": "MicrosoftWindowsServer",
+    "ADVMImageOffer": "WindowsServer",
+    "ADVMOSDiskName": "ADVMOSDisk",
+    "ADVMVmSize": "Standard_DS1_V2",
+    "ADVMVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'OPSTrainingVNET')]",
+    "ADVMSubnetRef": "[concat(variables('ADVMVnetID'), '/subnets/', variables('OPSTrainingVNETSubnet2Name'))]",
+    "ADVMStorageAccountContainerName": "vhds",
+    "ADVMNicName": "[concat(parameters('ADVMName'), 'NetworkInterface')]",
+    "InstallADScriptFolder": "CustomScripts",
+    "InstallADScriptFileName": "InstallAD.ps1",
+    "scriptFolder": ".",
+    "VM1scriptFileName": "deploy-ad.ps1",
+    "VM1scriptParameters": "[concat(' -domain ', parameters('domainName'), ' -password ', parameters('adminPassword'))]",
+    "DomainJoinscriptFileName": "domain-join.ps1",
+    "DomainJoinscriptParameters": "[concat(' -domain ', parameters('domainName'), ' -user ', parameters('adminUsername'), ' -password ', parameters('adminPassword'))]",
+    "adipName": "adip",
+    "AgentBackupVM1ImagePublisher": "MicrosoftWindowsServer",
+    "AgentBackupVM1ImageOffer": "WindowsServer",
+    "AgentBackupVM1OSDiskName": "AgentBackupVM1OSDisk",
+    "AgentBackupVM1VmSize": "Standard_DS1_V2",
+    "AgentBackupVM1VnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'OPSTrainingVNET')]",
+    "AgentBackupVM1SubnetRef": "[concat(variables('AgentBackupVM1VnetID'), '/subnets/', variables('OPSTrainingVNETSubnet1Name'))]",
+    "AgentBackupVM1StorageAccountContainerName": "vhds",
+    "AgentBackupVM1NicName": "[concat(parameters('AgentBackupVM1Name'), 'NetworkInterface')]",
+    "AgentBackupVM1-ipName": "AgentBackupVM1-ip",
+    "MABSServerVM1ImagePublisher": "MicrosoftWindowsServer",
+    "MABSServerVM1ImageOffer": "WindowsServer",
+    "MABSServerVM1OSDiskName": "MABSServerVM1OSDisk",
+    "MABSServerVM1VmSize": "Standard_DS1_V2",
+    "MABSServerVM1VnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'OPSTrainingVNET')]",
+    "MABSServerVM1SubnetRef": "[concat(variables('MABSServerVM1VnetID'), '/subnets/', variables('OPSTrainingVNETSubnet1Name'))]",
+    "MABSServerVM1StorageAccountContainerName": "vhds",
+    "MABSServerVM1NicName": "[concat(parameters('MABSServerVM1Name'), 'NetworkInterface')]",
+    "MABSDISK1": "[concat('http://',variables('vmstorageName'),'.blob.core.windows.net/','vhds','/','dataDisk1.vhd')]",
+    "IAASBackupVM1ImagePublisher": "MicrosoftWindowsServer",
+    "IAASBackupVM1ImageOffer": "WindowsServer",
+    "IAASBackupVM1OSDiskName": "IAASBackupVM1OSDisk",
+    "IAASBackupVM1VmSize": "Standard_DS1_V2",
+    "IAASBackupVM1VnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'OPSTrainingVNET')]",
+    "IAASBackupVM1SubnetRef": "[concat(variables('IAASBackupVM1VnetID'), '/subnets/', variables('OPSTrainingVNETSubnet1Name'))]",
+    "IAASBackupVM1StorageAccountContainerName": "vhds",
+    "IAASBackupVM1NicName": "[concat(parameters('IAASBackupVM1Name'), 'NetworkInterface')]",
+    "IAASBackupVM1-ipName": "IAASBackupVM1-ip",
+    "MABSServerVm1-IPName": "MABSServerVm1-IP"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "name": "VNet",
+      "apiVersion": "2016-02-01",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/opsgility/lab-support-public/master/implementing-azure-backup/vnet.json",
+          "contentVersion": "1.0.0.0"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "name": "VNetWithDNS",
+      "apiVersion": "2016-02-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', parameters('ADVMName'), 'InstallAD')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/opsgility/lab-support-public/master/implementing-azure-backup/vnet-with-dns.json",
+          "contentVersion": "1.0.0.0"
+        }
+      }
+    },
+    {
+      "name": "[variables('vmstorageName')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-01-01",
+      "sku": {
+        "name": "[parameters('vmstorageType')]"
+      },
+      "dependsOn": [],
+      "tags": {
+        "displayName": "vmstorage"
+      },
+      "kind": "Storage"
+    },
+    {
+      "name": "[variables('ADVMNicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "Microsoft.Resources/deployments/VNet",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('adipName'))]"
+      ],
+      "tags": {
+        "displayName": "ADVMNic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('ADVMSubnetRef')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('adipName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[parameters('ADVMName')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('ADVMNicName'))]"
+      ],
+      "tags": {
+        "displayName": "MABSADDSVM1"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('ADVMVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('ADVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('ADVMImagePublisher')]",
+            "offer": "[variables('ADVMImageOffer')]",
+            "sku": "[parameters('ADVMWindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "ADVMOSDisk",
+            "vhd": {
+              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName')), '2016-01-01').primaryEndpoints.blob, variables('ADVMStorageAccountContainerName'), '/', variables('ADVMOSDiskName'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('ADVMNicName'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "InstallAD",
+          "type": "extensions",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2016-03-30",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', parameters('ADVMName'))]"
+          ],
+          "tags": {
+            "displayName": "InstallAD"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "CustomScriptExtension",
+            "typeHandlerVersion": "1.4",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "fileUris": [
+                "[concat(parameters('ADInstallscriptUrl'))]"
+              ],
+              "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('scriptFolder'), '/', variables('VM1scriptFileName'), ' ', variables('VM1scriptParameters'))]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "[variables('adipName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "adip"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    },
+    {
+      "name": "[variables('AgentBackupVM1NicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "Microsoft.Resources/deployments/VNet",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('AgentBackupVM1-ipName'))]"
+      ],
+      "tags": {
+        "displayName": "AgentBackupVM1Nic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('AgentBackupVM1SubnetRef')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('AgentBackupVM1-ipName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[parameters('AgentBackupVM1Name')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('AgentBackupVM1NicName'))]",
+        "Microsoft.Resources/deployments/VNetWithDNS"
+      ],
+      "tags": {
+        "displayName": "AgentBackupVM1"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('AgentBackupVM1VmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('AgentBackupVM1Name')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('AgentBackupVM1ImagePublisher')]",
+            "offer": "[variables('AgentBackupVM1ImageOffer')]",
+            "sku": "[parameters('AgentBackupVM1WindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "AgentBackupVM1OSDisk",
+            "vhd": {
+              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName')), '2016-01-01').primaryEndpoints.blob, variables('AgentBackupVM1StorageAccountContainerName'), '/', variables('AgentBackupVM1OSDiskName'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('AgentBackupVM1NicName'))]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[variables('AgentBackupVM1-ipName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "AgentBackupVM1-ip"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    },
+    {
+      "name": "[variables('MABSServerVM1NicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "Microsoft.Resources/deployments/VNet",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('MABSServerVm1-IPName'))]"
+      ],
+      "tags": {
+        "displayName": "MABSServerVM1Nic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('MABSServerVM1SubnetRef')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('MABSServerVm1-IPName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[parameters('MABSServerVM1Name')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('MABSServerVM1NicName'))]",
+        "Microsoft.Resources/deployments/VNetWithDNS"
+      ],
+      "tags": {
+        "displayName": "MABSServerVM1"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('MABSServerVM1VmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('MABSServerVM1Name')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('MABSServerVM1ImagePublisher')]",
+            "offer": "[variables('MABSServerVM1ImageOffer')]",
+            "sku": "[parameters('MABSServerVM1WindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "MABSServerVM1OSDisk",
+            "vhd": {
+              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName')), '2016-01-01').primaryEndpoints.blob, variables('MABSServerVM1StorageAccountContainerName'), '/', variables('MABSServerVM1OSDiskName'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "datadisk1",
+              "diskSizeGB": "1023",
+              "lun": 0,
+              "vhd": { "uri": "[variables('MABSDISK1')]" },
+              "createOption": "Empty"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('MABSServerVM1NicName'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "DomainJoin",
+          "type": "extensions",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2016-03-30",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', parameters('MABSServerVM1Name'))]",
+            "[resourceId('Microsoft.Compute/virtualMachines/extensions', parameters('ADVMName'), 'InstallAD')]"
+          ],
+          "tags": {
+            "displayName": "DomainJoin"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "CustomScriptExtension",
+            "typeHandlerVersion": "1.4",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "fileUris": [
+                "[concat(parameters('DomainJoinscriptUrl'))]"
+              ],
+              "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('scriptFolder'), '/', variables('DomainJoinscriptFileName'), ' ', variables('DomainJoinscriptParameters'))]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "[variables('IAASBackupVM1NicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "Microsoft.Resources/deployments/VNet",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('IAASBackupVM1-ipName'))]"
+      ],
+      "tags": {
+        "displayName": "IAASBackupVM1Nic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('IAASBackupVM1SubnetRef')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('IAASBackupVM1-ipName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[parameters('IAASBackupVM1Name')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('IAASBackupVM1NicName'))]",
+        "Microsoft.Resources/deployments/VNetWithDNS"
+      ],
+      "tags": {
+        "displayName": "IAASBackupVM1"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('IAASBackupVM1VmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('IAASBackupVM1Name')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('IAASBackupVM1ImagePublisher')]",
+            "offer": "[variables('IAASBackupVM1ImageOffer')]",
+            "sku": "[parameters('IAASBackupVM1WindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "IAASBackupVM1OSDisk",
+            "vhd": {
+              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('vmstorageName')), '2016-01-01').primaryEndpoints.blob, variables('IAASBackupVM1StorageAccountContainerName'), '/', variables('IAASBackupVM1OSDiskName'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('IAASBackupVM1NicName'))]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[variables('IAASBackupVM1-ipName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "IAASBackupVM1-ip"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    },
+    {
+      "name": "[variables('MABSServerVm1-IPName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [ ],
+      "tags": {
+        "displayName": "MABSServerVm1-IP"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    }
+  ],
+    "outputs": {}
+  }
